@@ -1,4 +1,4 @@
-package com.mk_rn_firebase
+package com.mkdemo.app
 
 import android.app.Application
 import com.facebook.react.PackageList
