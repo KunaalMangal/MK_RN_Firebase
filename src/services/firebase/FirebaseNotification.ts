@@ -84,7 +84,8 @@ class FirebaseNotification {
 
   private async getFCMToken(): Promise<void> {
     try {
-      const existingToken = 'appStorage.getItem(STORAGE_KEYS.DEVICE_TOKEN)';
+      // const existingToken = 'appStorage.getItem(STORAGE_KEYS.DEVICE_TOKEN)';
+      const existingToken = '';
 
       if (existingToken) {
         console.log('[FCM Token Exists]:', existingToken);

@@ -1,4 +1,4 @@
-package com.mkdemo.app
+package com.mk_rn_firebase
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
