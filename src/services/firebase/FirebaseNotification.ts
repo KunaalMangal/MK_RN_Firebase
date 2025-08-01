@@ -1,33 +1,36 @@
-import {PermissionsAndroid, Platform} from 'react-native';
-import messaging from '@react-native-firebase/messaging';
+import {Platform, PermissionsAndroid} from 'react-native';
+import messaging, {
+  AuthorizationStatus,
+  FirebaseMessagingTypes,
+} from '@react-native-firebase/messaging';
+
+import {NotificationService} from '../../utils';
 
 class FirebaseNotification {
-  // initialize function
-  async init() {
+  async init(): Promise<void> {
     await this.checkPermission();
     this.setupMessageListeners();
   }
 
-  //   checking the firebase permission is given or not
-  async checkPermission() {
+  private async checkPermission(): Promise<void> {
     try {
       const authStatus = await messaging().hasPermission();
       const enabled =
-        authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
-        authStatus === messaging.AuthorizationStatus.PROVISIONAL;
-      console.log('check notification permission', enabled);
+        authStatus === AuthorizationStatus.AUTHORIZED ||
+        authStatus === AuthorizationStatus.PROVISIONAL;
+
+      console.log('[Notification Permission Enabled]:', enabled);
       if (enabled) {
         await this.getFCMToken();
       } else {
         await this.requestPermission();
       }
     } catch (error) {
-      console.error('error during checking notification permission', error);
+      console.error('[checkPermission error]:', error);
     }
   }
 
-  //   requesting the firebase push notification permission
-  async requestPermission() {
+  private async requestPermission(): Promise<void> {
     try {
       if (Platform.OS === 'android') {
         await this.requestAndroidPermission();
@@ -35,88 +38,115 @@ class FirebaseNotification {
         await this.requestIOSPermission();
       }
     } catch (error) {
-      console.error('error during requesting notification permission', error);
+      console.error('[requestPermission error]:', error);
     }
   }
 
-  //   requesting the firebase push notification permission for Android
-  async requestAndroidPermission() {
-    console.log('requestAndroidPermission', Platform.Version);
-    if (Platform.Version >= '33') {
-      const result = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
-      );
-      console.log('Android notification permission', result);
-      if (result === PermissionsAndroid.RESULTS.GRANTED) {
-        await this.getFCMToken();
-      } else {
-        console.log('Notification permission denied on Android');
-      }
-    } else {
-      await this.getFCMToken();
-    }
-  }
-
-  //   requesting the firebase push notification permission for IOS
-  async requestIOSPermission() {
-    console.log('requestIOSPermission');
-    const authStatus = await messaging().requestPermission();
-    const enabled =
-      authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
-      authStatus === messaging.AuthorizationStatus.PROVISIONAL;
-
-    console.log('Authorization status:', authStatus);
-
-    if (enabled) {
-      await this.getFCMToken();
-    } else {
-      console.log('Notification permission denied on iOS');
-    }
-  }
-
-  //   generating the fcm token if not exists
-  async getFCMToken() {
+  private async requestAndroidPermission(): Promise<void> {
     try {
-      const fcmToken = '';
-      if (fcmToken) {
-        console.log('FCM Token already exists...', fcmToken);
+      const sdkVersion = Platform.Version as number;
+      if (sdkVersion >= 33) {
+        const result = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
+        );
+
+        if (result === PermissionsAndroid.RESULTS.GRANTED) {
+          await this.getFCMToken();
+        } else {
+          console.warn('[Android Notification Permission Denied]');
+        }
       } else {
-        const token = await messaging().getToken();
-        console.log('FCM Token generate...', token);
-        //   manage the fcm token further after receive
+        await this.getFCMToken();
       }
     } catch (error) {
-      console.error('Error generating FCM token', error);
+      console.error('[requestAndroidPermission error]:', error);
     }
   }
 
-  //  listners for receiving the remote messages
-  setupMessageListeners() {
-    // call when the notification arrive in foreground
-    messaging().onMessage(async remoteMessage => {
-      console.log('FCM Message Data:', remoteMessage);
-    });
+  private async requestIOSPermission(): Promise<void> {
+    try {
+      const authStatus = await messaging().requestPermission();
+      const enabled =
+        authStatus === AuthorizationStatus.AUTHORIZED ||
+        authStatus === AuthorizationStatus.PROVISIONAL;
 
-    // call when the app in quit/kiiled state and tap on notification from notification tray
+      console.log('[iOS Authorization Status]:', authStatus);
+
+      if (enabled) {
+        await this.getFCMToken();
+      } else {
+        console.warn('[iOS Notification Permission Denied]');
+      }
+    } catch (error) {
+      console.error('[requestIOSPermission error]:', error);
+    }
+  }
+
+  private async getFCMToken(): Promise<void> {
+    try {
+      const existingToken = 'appStorage.getItem(STORAGE_KEYS.DEVICE_TOKEN)';
+
+      if (existingToken) {
+        console.log('[FCM Token Exists]:', existingToken);
+        return;
+      }
+
+      const newToken = await messaging().getToken();
+
+      if (newToken) {
+        console.log('[FCM Token Fetched]:', newToken);
+        // appStorage.setItem(STORAGE_KEYS.DEVICE_TOKEN, newToken);
+      }
+    } catch (error) {
+      console.error('[getFCMToken error]:', error);
+    }
+  }
+
+  private setupMessageListeners(): void {
+    messaging().onMessage(
+      async (remoteMessage: FirebaseMessagingTypes.RemoteMessage) => {
+        console.log('[Foreground FCM Message]:', remoteMessage);
+        const title = remoteMessage.notification?.title ?? 'New Notification';
+        const body =
+          remoteMessage.notification?.body ?? 'You have a new message.';
+        await NotificationService.display(title, body);
+      },
+    );
+
     messaging()
       .getInitialNotification()
-      .then(async remoteMessage => {
-        console.log('FCM getInitialNotification Message:', remoteMessage);
+      .then(remoteMessage => {
+        if (remoteMessage) {
+          console.log('[Initial Notification]:', remoteMessage);
+        }
       })
       .catch(error => {
-        console.error('error during generating notification token', error);
+        console.error('[getInitialNotification error]:', error);
       });
 
-    // call when the app in background and tap on notification from notification tray
-    messaging().onNotificationOpenedApp(async remoteMessage => {
-      console.log('FCM Notification Opened:', remoteMessage);
-    });
+    messaging().onNotificationOpenedApp(
+      (remoteMessage: FirebaseMessagingTypes.RemoteMessage) => {
+        console.log('[Notification Opened in Background]:', remoteMessage);
+      },
+    );
 
-    // refreshing FCM token
-    messaging().onTokenRefresh(token => {
-      console.log('FCM Token Refreshed:', token);
+    messaging().onTokenRefresh((token: string) => {
+      console.log('[FCM Token Refreshed]:', token);
+      // appStorage.setItem(STORAGE_KEYS.DEVICE_TOKEN, token);
     });
+  }
+
+  public registerFirebaseBackgroundHandler(): void {
+    messaging().setBackgroundMessageHandler(
+      async (remoteMessage: FirebaseMessagingTypes.RemoteMessage) => {
+        console.log('[Background FCM Message]:', remoteMessage);
+        const title = remoteMessage.notification?.title ?? 'New Notification';
+        const body =
+          remoteMessage.notification?.body ?? 'You have a new message.';
+        await NotificationService.display(title, body);
+      },
+    );
   }
 }
 
-export default FirebaseNotification;
+export default new FirebaseNotification();

@@ -24,7 +24,7 @@ import {
   LearnMoreLinks,
   ReloadInstructions,
 } from 'react-native/Libraries/NewAppScreen';
-import { FirebaseNotification } from './src/services';
+import {FirebaseNotification} from './src/services';
 
 type SectionProps = PropsWithChildren<{
   title: string;
@@ -64,10 +64,7 @@ function App(): React.JSX.Element {
   };
 
   useEffect(() => {
-    const firebase = new FirebaseNotification();
-    firebase.init();
-
-    // return () => subscribe.remove();
+    FirebaseNotification.init();
   }, []);
 
   return (
